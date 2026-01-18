@@ -1,0 +1,15 @@
+/* Workday Copilot - Content Script Styles */
+/* These styles are injected into Workday pages */
+
+.wdc-filled {
+  outline: 2px solid #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  transition: all 0.2s ease !important;
+}
+
+.wdc-review {
+  outline: 2px solid #f59e0b !important;
+  background-color: rgba(245, 158, 11, 0.1) !important;
+  transition: all 0.2s ease !important;
+}
+

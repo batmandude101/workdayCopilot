@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workday Copilot</title>
+  <link rel="stylesheet" href="styles/popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>Workday Copilot</span>
+      </div>
+      <div id="status-indicator" class="status-indicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Checking...</span>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="fill">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        Fill
+      </button>
+      <button class="tab" data-tab="profile">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        Profile
+      </button>
+      <button class="tab" data-tab="history">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12 6 12 12 16 14"/>
+        </svg>
+        History
+      </button>
+      <button class="tab" data-tab="settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+        </svg>
+        Settings
+      </button>
+    </nav>
+
+    <main class="tab-content">
+      <section id="fill-tab" class="tab-panel active">
+        <div id="workday-not-detected" class="message-box warning">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div>
+            <strong>Not on Workday</strong>
+            <p>Navigate to a Workday job application page to use autofill.</p>
+          </div>
+        </div>
+
+        <div id="workday-detected" class="action-panel" style="display: none;">
+          <div class="page-info">
+            <span class="company-name" id="page-company">Company Name</span>
+            <span class="role-name" id="page-role">Job Role</span>
+          </div>
+
+          <div class="button-group">
+            <button id="btn-preview" class="btn btn-secondary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              Preview
+            </button>
+            <button id="btn-fill" class="btn btn-primary">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              Fill Page
+            </button>
+          </div>
+
+          <button id="btn-undo" class="btn btn-ghost" disabled>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            Undo Last Fill
+          </button>
+
+          <div id="fill-report" class="fill-report" style="display: none;">
+            <div class="report-stats">
+              <span class="stat filled"><span id="stat-filled">0</span> Filled</span>
+              <span class="stat review"><span id="stat-review">0</span> Review</span>
+              <span class="stat skipped"><span id="stat-skipped">0</span> Skipped</span>
+            </div>
+            <div id="review-list" class="review-list"></div>
+          </div>
+
+          <div id="confirmation-prompt" class="confirmation-prompt" style="display: none;">
+            <p>🎉 Application submitted! Track it?</p>
+            <button id="btn-mark-applied" class="btn btn-success btn-sm">Mark as Applied</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile Tab -->
+      <section id="profile-tab" class="tab-panel">
+        <form id="profile-form" class="profile-form">
+          <!-- Personal Section -->
+          <fieldset class="form-section">
+            <legend>Personal Information</legend>
+            
+            <div class="form-row">
+              <div class="form-group">
+                <label for="firstName">First Name <span class="required">*</span></label>
+                <input type="text" id="firstName" name="firstName" required>
+              </div>
+              <div class="form-group">
+                <label for="lastName">Last Name <span class="required">*</span></label>
+                <input type="text" id="lastName" name="lastName" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="email">Email <span class="required">*</span></label>
+                <input type="email" id="email" name="email" required>
+              </div>
+              <div class="form-group">
+                <label for="phone">Phone <span class="required">*</span></label>
+                <input type="tel" id="phone" name="phone" required>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Address Section -->
+          <fieldset class="form-section">
+            <legend>Address</legend>
+            
+            <div class="form-group full-width">
+              <label for="street">Street Address</label>
+              <input type="text" id="street" name="street">
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="city">City</label>
+                <input type="text" id="city" name="city">
+              </div>
+              <div class="form-group">
+                <label for="state">State/Province</label>
+                <input type="text" id="state" name="state">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="country">Country</label>
+                <input type="text" id="country" name="country">
+              </div>
+              <div class="form-group">
+                <label for="postalCode">Postal Code</label>
+                <input type="text" id="postalCode" name="postalCode">
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- Links Section -->
+          <fieldset class="form-section">
+            <legend>Links</legend>
+            
+            <div class="form-group full-width">
+              <label for="linkedInUrl">LinkedIn URL</label>
+              <input type="url" id="linkedInUrl" name="linkedInUrl" placeholder="https://linkedin.com/in/...">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="portfolioUrl">Portfolio/Website</label>
+              <input type="url" id="portfolioUrl" name="portfolioUrl" placeholder="https://...">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="githubUrl">GitHub URL</label>
+              <input type="url" id="githubUrl" name="githubUrl" placeholder="https://github.com/...">
+            </div>
+          </fieldset>
+
+          <!-- Work Authorization Section -->
+          <fieldset class="form-section">
+            <legend>Work Authorization</legend>
+            
+            <div class="form-group full-width">
+              <label for="authorizedToWork">Authorized to Work in Country?</label>
+              <select id="authorizedToWork" name="authorizedToWork">
+                <option value="">-- Select --</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="requiresSponsorship">Requires Visa Sponsorship?</label>
+              <select id="requiresSponsorship" name="requiresSponsorship">
+                <option value="">-- Select --</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="noticePeriod">Notice Period</label>
+              <input type="text" id="noticePeriod" name="noticePeriod" placeholder="e.g., 2 weeks, 30 days">
+            </div>
+
+            <div class="form-group full-width">
+              <label for="willingToRelocate">Willing to Relocate?</label>
+              <select id="willingToRelocate" name="willingToRelocate">
+                <option value="">-- Select --</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+            </div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Profile</button>
+            <span id="save-status" class="save-status"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- History Tab -->
+      <section id="history-tab" class="tab-panel">
+        <div class="history-controls">
+          <div class="search-filter">
+            <input type="text" id="history-search" placeholder="Search company or role...">
+            <select id="history-filter">
+              <option value="">All Statuses</option>
+              <option value="applied">Applied</option>
+              <option value="interviewing">Interviewing</option>
+              <option value="offered">Offered</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="no_response">No Response</option>
+            </select>
+          </div>
+          <button id="btn-export-csv" class="btn btn-secondary btn-sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export CSV
+          </button>
+        </div>
+
+        <div id="history-list" class="history-list">
+          <div class="empty-state">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            <p>No applications tracked yet</p>
+            <span>Click "Mark as Applied" after submitting an application</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Tab -->
+      <section id="settings-tab" class="tab-panel">
+        <div class="settings-list">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label for="setting-overwrite">Overwrite Existing Values</label>
+              <span class="setting-desc">Fill fields even if they already have values</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="setting-overwrite">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label for="setting-preview">Preview Before Fill</label>
+              <span class="setting-desc">Always show preview before filling</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="setting-preview">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <hr class="divider">
+
+        <div class="danger-zone">
+          <h4>Data Management</h4>
+          
+          <button id="btn-export-data" class="btn btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export All Data (JSON)
+          </button>
+
+          <button id="btn-clear-data" class="btn btn-danger">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Clear All Data
+          </button>
+        </div>
+
+        <footer class="settings-footer">
+          <p>Workday Copilot v1.0.0</p>
+          <p class="disclaimer">This extension stores all data locally. No data is sent to external servers.</p>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="popup/popup.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Workday Copilot",
+  "version": "1.0.0",
+  "description": "Apply to Workday jobs 3-5x faster with intelligent, user-controlled autofill",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.myworkdayjobs.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Workday Copilot"
+  },
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.myworkdayjobs.com/*"],
+      "js": ["content/content-script.js"],
+      "css": ["content/content-styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles/*"],
+      "matches": ["*://*.myworkdayjobs.com/*"]
+    }
+  ]
+}
+

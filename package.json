@@ -1,0 +1,18 @@
+{
+  "name": "workday-copilot",
+  "version": "1.0.0",
+  "description": "Apply to Workday jobs 3-5x faster with intelligent, user-controlled autofill",
+  "type": "module",
+  "scripts": {
+    "build": "npm run clean && tsc && npm run copy-assets",
+    "watch": "tsc --watch",
+    "clean": "rm -rf dist",
+    "copy-assets": "cp public/manifest.json dist/ && cp public/popup.html dist/ && cp -r public/styles dist/ && cp -r public/content dist/"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "typescript": "^5.4.0"
+  },
+  "author": "",
+  "license": "MIT"
+}

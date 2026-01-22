@@ -31,3 +31,4 @@ echo "2. Enable Developer Mode"
 echo "3. Click 'Load unpacked'"
 echo "4. Select the dist/ folder"
 
+

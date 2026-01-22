@@ -56,3 +56,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 console.log('Workday Copilot: Service worker started');
 
+

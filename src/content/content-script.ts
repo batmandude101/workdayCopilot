@@ -531,3 +531,4 @@ function injectStyles(): void {
 injectStyles();
 console.log('Workday Copilot: Content script loaded');
 
+

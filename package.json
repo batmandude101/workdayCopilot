@@ -4,13 +4,15 @@
   "description": "Apply to Workday jobs 3-5x faster with intelligent, user-controlled autofill",
   "type": "module",
   "scripts": {
-    "build": "npm run clean && tsc && npm run copy-assets",
-    "watch": "tsc --watch",
-    "clean": "node -e \"const fs=require('fs');fs.rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && npm run bundle && npm run copy-assets",
+    "bundle": "node scripts/build.js",
+    "watch": "node scripts/build.js --watch",
+    "clean": "node -e \"import('fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
     "copy-assets": "node scripts/copy-assets.js"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.268",
+    "esbuild": "^0.20.0",
     "typescript": "^5.4.0"
   },
   "author": "",

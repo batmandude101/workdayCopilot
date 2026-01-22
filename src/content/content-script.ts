@@ -21,6 +21,7 @@ import {
   getProfileValue,
   YES_PATTERNS,
   NO_PATTERNS,
+  isYesNoQuestion,
 } from '../shared/field-mappings.js';
 
 import {
@@ -64,38 +65,59 @@ interface ScannedField {
 
 function scanFormFields(): ScannedField[] {
   const fields: ScannedField[] = [];
-  
-  // Find all input fields
+
+  // Find all relevant fields
   const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
     'input[type="text"], input[type="email"], input[type="tel"], input[type="url"], ' +
-    'input:not([type]), textarea, select'
+      'input:not([type]), textarea, select'
   );
-  
-  inputs.forEach(element => {
-    // Skip hidden, disabled, or readonly fields
+
+  inputs.forEach((element) => {
+    // --- Narrow-only properties (readonly/placeholder) ---
+    const isReadOnly =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.readOnly
+        : false;
+
+    const placeholder =
+      element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.placeholder || ''
+        : '';
+
+    // Skip hidden, disabled, readonly, or not visible
     if (
-      element.type === 'hidden' ||
+      (element instanceof HTMLInputElement && element.type === 'hidden') ||
       element.disabled ||
-      element.readOnly ||
+      isReadOnly ||
       !isVisible(element)
     ) {
       return;
     }
-    
+
     const labelText = findLabelText(element);
-    
+
+    // Normalize "type" to match FIELD_MAPPINGS inputTypes
+    const kind =
+      element instanceof HTMLSelectElement
+        ? 'select'
+        : element instanceof HTMLTextAreaElement
+          ? 'textarea'
+          : element instanceof HTMLInputElement
+            ? element.type || 'text'
+            : 'text';
+
     fields.push({
       element,
       labelText,
       ariaLabel: element.getAttribute('aria-label') || '',
       name: element.name || '',
       id: element.id || '',
-      placeholder: element.placeholder || '',
-      type: element.type || 'text',
+      placeholder,
+      type: kind,
       currentValue: element.value || '',
     });
   });
-  
+
   return fields;
 }
 
@@ -111,27 +133,26 @@ function isVisible(element: HTMLElement): boolean {
 
 function findLabelText(element: HTMLElement): string {
   // Method 1: Associated label via for/id
-  if (element.id) {
-    const label = document.querySelector<HTMLLabelElement>(`label[for="${element.id}"]`);
+  if ((element as HTMLInputElement).id) {
+    const label = document.querySelector<HTMLLabelElement>(`label[for="${(element as HTMLInputElement).id}"]`);
     if (label) return label.textContent?.trim() || '';
   }
-  
+
   // Method 2: Parent label
   const parentLabel = element.closest('label');
   if (parentLabel) {
-    // Get text content excluding the input itself
     const clone = parentLabel.cloneNode(true) as HTMLElement;
-    clone.querySelectorAll('input, textarea, select').forEach(el => el.remove());
+    clone.querySelectorAll('input, textarea, select').forEach((el) => el.remove());
     return clone.textContent?.trim() || '';
   }
-  
+
   // Method 3: aria-labelledby
   const labelledBy = element.getAttribute('aria-labelledby');
   if (labelledBy) {
     const labelEl = document.getElementById(labelledBy);
     if (labelEl) return labelEl.textContent?.trim() || '';
   }
-  
+
   // Method 4: Previous sibling or parent's previous sibling
   let prev = element.previousElementSibling;
   if (!prev) {
@@ -140,12 +161,11 @@ function findLabelText(element: HTMLElement): string {
   if (prev && (prev.tagName === 'LABEL' || prev.tagName === 'SPAN' || prev.tagName === 'DIV')) {
     return prev.textContent?.trim() || '';
   }
-  
+
   // Method 5: Data attributes commonly used by Workday
-  const dataLabel = element.getAttribute('data-automation-id') || 
-                    element.getAttribute('data-uxi-widget-type');
+  const dataLabel = element.getAttribute('data-automation-id') || element.getAttribute('data-uxi-widget-type');
   if (dataLabel) return dataLabel;
-  
+
   return '';
 }
 
@@ -154,51 +174,41 @@ function findLabelText(element: HTMLElement): string {
 // ============================================================
 
 function matchFieldToProfile(field: ScannedField, profile: UserProfile): MatchedField | null {
-  // Combine all possible label sources
-  const labelSources = [
-    field.labelText,
-    field.ariaLabel,
-    field.name,
-    field.id,
-    field.placeholder,
-  ].filter(Boolean);
-  
+  const labelSources = [field.labelText, field.ariaLabel, field.name, field.id, field.placeholder].filter(Boolean);
   const normalizedLabels = labelSources.map(normalizeText);
-  
-  // Try to match against our field mappings
+
   for (const mapping of FIELD_MAPPINGS) {
-    // Check if input type is compatible
     const inputType = field.type.toLowerCase();
-    if (!mapping.inputTypes.some(t => 
-      t === inputType || 
-      (t === 'text' && !['email', 'tel', 'url'].includes(inputType))
-    )) {
+
+    // Compatibility check (treat "text" as default for non-special input types)
+    if (
+      !mapping.inputTypes.some(
+        (t) =>
+          t === inputType ||
+          (t === 'text' && !['email', 'tel', 'url', 'select', 'textarea', 'radio'].includes(inputType))
+      )
+    ) {
       continue;
     }
-    
-    // Check for matches
+
     let confidence: ConfidenceLevel = 'none';
-    
+
     for (const normalized of normalizedLabels) {
       for (const synonym of mapping.synonyms) {
         if (normalized === synonym) {
-          // Exact match
           confidence = 'high';
           break;
         } else if (normalized.includes(synonym) || synonym.includes(normalized)) {
-          // Partial match
           if (confidence === 'none') confidence = 'medium';
         }
       }
       if (confidence === 'high') break;
     }
-    
+
     if (confidence !== 'none') {
       const suggestedValue = getProfileValue(profile as unknown as Record<string, unknown>, mapping.profileKey);
-      
-      // Skip if no value in profile
       if (!suggestedValue) continue;
-      
+
       return {
         element: field.element,
         selectorHint: generateSelectorHint(field.element),
@@ -210,7 +220,7 @@ function matchFieldToProfile(field: ScannedField, profile: UserProfile): Matched
       };
     }
   }
-  
+
   return null;
 }
 
@@ -220,84 +230,147 @@ function generateSelectorHint(element: HTMLElement): string {
   if (element.getAttribute('data-automation-id')) {
     return `[data-automation-id="${element.getAttribute('data-automation-id')}"]`;
   }
-  
+
   // Fallback: generate a path-based selector
   const path: string[] = [];
   let current: HTMLElement | null = element;
+
   while (current && current !== document.body) {
     let selector = current.tagName.toLowerCase();
+
     if (current.id) {
       selector = `#${current.id}`;
       path.unshift(selector);
       break;
     }
-    const parent = current.parentElement;
+
+    const parent: HTMLElement | null = current.parentElement;
     if (parent) {
-      const siblings = Array.from(parent.children).filter(c => c.tagName === current!.tagName);
-      if (siblings.length > 1) {
-        const index = siblings.indexOf(current) + 1;
+      const siblings = Array.from(parent.children) as HTMLElement[];
+      const sameTag = siblings.filter((s) => s.tagName === current!.tagName);
+
+      if (sameTag.length > 1) {
+        const index = sameTag.indexOf(current) + 1;
         selector += `:nth-of-type(${index})`;
       }
     }
+
     path.unshift(selector);
     current = parent;
   }
+
   return path.join(' > ');
 }
 
 // ============================================================
-// Fill Logic
+// Fill Logic (updated for select + yes/no)
 // ============================================================
 
-function fillField(
-  field: MatchedField,
-  overwriteExisting: boolean
-): TouchedField | null {
+function fillField(field: MatchedField, overwriteExisting: boolean): TouchedField | null {
   const element = field.element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-  
-  // Check if should fill
+
   if (!overwriteExisting && field.currentValue) {
     return null;
   }
-  
+
   const previousValue = element.value;
-  
-  // Set the value
-  element.value = field.suggestedValue;
-  
-  // Dispatch events to trigger React/Angular form updates
+
+  const ok = setElementValue(element, field.suggestedValue, field.labelText);
+
+  if (!ok) {
+    // Could not safely set (e.g. no matching option) => mark for review
+    element.classList.add(HIGHLIGHT_CLASS_REVIEW);
+    return {
+      selectorHint: field.selectorHint,
+      previousValue,
+      newValue: previousValue, // unchanged
+      profileKey: field.profileKey,
+      confidence: 'medium',
+    };
+  }
+
   dispatchInputEvents(element);
-  
-  // Add visual highlight
-  element.classList.add(
-    field.confidence === 'high' ? HIGHLIGHT_CLASS_FILLED : HIGHLIGHT_CLASS_REVIEW
-  );
-  
+
+  element.classList.add(field.confidence === 'high' ? HIGHLIGHT_CLASS_FILLED : HIGHLIGHT_CLASS_REVIEW);
+
   return {
     selectorHint: field.selectorHint,
     previousValue,
-    newValue: field.suggestedValue,
+    newValue: element.value,
     profileKey: field.profileKey,
     confidence: field.confidence,
   };
 }
 
+function setElementValue(
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  suggestedValue: string,
+  labelText: string
+): boolean {
+  if (element instanceof HTMLSelectElement) {
+    return setSelectValue(element, suggestedValue, labelText);
+  }
+
+  // For input/textarea
+  element.value = suggestedValue;
+  return true;
+}
+
+function setSelectValue(select: HTMLSelectElement, suggestedValue: string, labelText: string): boolean {
+  const wanted = normalizeText(String(suggestedValue));
+
+  const isYN = isYesNoQuestion(labelText);
+  const wantedYN =
+    isYN && YES_PATTERNS.includes(wanted)
+      ? 'yes'
+      : isYN && NO_PATTERNS.includes(wanted)
+        ? 'no'
+        : null;
+
+  const options = Array.from(select.options);
+
+  const scored = options
+    .map((opt) => {
+      const text = normalizeText(opt.textContent || opt.label || '');
+      const val = normalizeText(opt.value || '');
+
+      let score = 0;
+
+      // de-prioritize placeholders
+      if (!opt.value && text.includes('select')) score -= 5;
+
+      if (wantedYN) {
+        if (wantedYN === 'yes' && YES_PATTERNS.some((p) => text === p || text.includes(p))) score += 10;
+        if (wantedYN === 'no' && NO_PATTERNS.some((p) => text === p || text.includes(p))) score += 10;
+      }
+
+      if (text === wanted || val === wanted) score += 8;
+      else if (text.includes(wanted) || wanted.includes(text)) score += 5;
+      else if (val.includes(wanted) || wanted.includes(val)) score += 4;
+
+      return { opt, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const best = scored[0];
+  if (!best || best.score <= 0) return false;
+
+  select.value = best.opt.value;
+  return true;
+}
+
 function dispatchInputEvents(element: HTMLElement): void {
-  // Create and dispatch events
   const inputEvent = new Event('input', { bubbles: true, cancelable: true });
   const changeEvent = new Event('change', { bubbles: true, cancelable: true });
   const blurEvent = new FocusEvent('blur', { bubbles: true, cancelable: true });
-  
+
   element.dispatchEvent(inputEvent);
   element.dispatchEvent(changeEvent);
   element.dispatchEvent(blurEvent);
-  
-  // Also try React's synthetic event trigger
-  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-    window.HTMLInputElement.prototype,
-    'value'
-  )?.set;
-  
+
+  // Also try React's synthetic event trigger for inputs
+  const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+
   if (nativeInputValueSetter && element instanceof HTMLInputElement) {
     const currentValue = element.value;
     nativeInputValueSetter.call(element, currentValue);
@@ -312,15 +385,15 @@ function dispatchInputEvents(element: HTMLElement): void {
 async function undoLastFill(): Promise<boolean> {
   const lastRun = await getLastFillRun();
   if (!lastRun) return false;
-  
+
   let restoredCount = 0;
-  
+
   for (const field of lastRun.touchedFields) {
     try {
       const element = document.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
         field.selectorHint
       );
-      
+
       if (element) {
         element.value = field.previousValue;
         dispatchInputEvents(element);
@@ -331,7 +404,7 @@ async function undoLastFill(): Promise<boolean> {
       console.warn('Failed to restore field:', field.selectorHint, error);
     }
   }
-  
+
   await clearLastFillRun();
   return restoredCount > 0;
 }
@@ -343,24 +416,21 @@ async function undoLastFill(): Promise<boolean> {
 function detectPageContext(): PageContext {
   const url = window.location.href;
   const title = document.title;
-  
-  // Extract company from URL
+
   let company = 'Unknown Company';
   const hostnameMatch = window.location.hostname.match(/^([^.]+)\.myworkdayjobs\.com/);
   if (hostnameMatch) {
     company = hostnameMatch[1].charAt(0).toUpperCase() + hostnameMatch[1].slice(1);
   }
-  
-  // Extract role from title
+
   let role = 'Job Application';
   const titleParts = title.split(/[-|]/);
   if (titleParts.length > 0) {
     role = titleParts[0].trim();
   }
-  
-  // Check for confirmation page
+
   const isConfirmationPage = checkIfConfirmationPage();
-  
+
   return {
     url,
     title,
@@ -372,15 +442,13 @@ function detectPageContext(): PageContext {
 }
 
 function checkIfConfirmationPage(): boolean {
-  // Check URL patterns
   const urlPatterns = ['/confirmation', '/applied', '/thankyou', '/thank-you', '/success'];
-  if (urlPatterns.some(pattern => window.location.href.toLowerCase().includes(pattern))) {
+  if (urlPatterns.some((pattern) => window.location.href.toLowerCase().includes(pattern))) {
     return true;
   }
-  
-  // Check page content
+
   const bodyText = document.body.innerText.toLowerCase();
-  return CONFIRMATION_PATTERNS.some(pattern => bodyText.includes(pattern));
+  return CONFIRMATION_PATTERNS.some((pattern) => bodyText.includes(pattern));
 }
 
 // ============================================================
@@ -389,26 +457,26 @@ function checkIfConfirmationPage(): boolean {
 
 chrome.runtime.onMessage.addListener((message: Message, _sender, sendResponse) => {
   handleMessage(message).then(sendResponse);
-  return true; // Keep channel open for async response
+  return true;
 });
 
 async function handleMessage(message: Message): Promise<unknown> {
   switch (message.type) {
     case 'GET_PAGE_CONTEXT':
       return detectPageContext();
-    
+
     case 'PREVIEW_FIELDS':
       return handlePreview();
-    
+
     case 'FILL_FIELDS':
       return handleFill(message.overwriteExisting);
-    
+
     case 'UNDO_LAST_FILL':
       return handleUndo();
-    
+
     case 'CHECK_CONFIRMATION':
       return { isConfirmation: checkIfConfirmationPage() };
-    
+
     default:
       return { error: 'Unknown message type' };
   }
@@ -417,28 +485,25 @@ async function handleMessage(message: Message): Promise<unknown> {
 async function handlePreview(): Promise<PreviewResult> {
   const profile = await getProfile();
   const scannedFields = scanFormFields();
-  
+
   const matchedFields: MatchedField[] = [];
-  
+
   for (const field of scannedFields) {
     const match = matchFieldToProfile(field, profile);
     if (match) {
       matchedFields.push(match);
-      
-      // Add temporary highlight
       match.element.classList.add(HIGHLIGHT_CLASS_REVIEW);
     }
   }
-  
-  // Remove highlights after 3 seconds
+
   setTimeout(() => {
-    matchedFields.forEach(field => {
+    matchedFields.forEach((field) => {
       field.element.classList.remove(HIGHLIGHT_CLASS_REVIEW);
     });
   }, 3000);
-  
+
   return {
-    fields: matchedFields.map(f => ({
+    fields: matchedFields.map((f) => ({
       label: f.labelText,
       profileKey: f.profileKey,
       suggestedValue: f.suggestedValue,
@@ -451,24 +516,24 @@ async function handlePreview(): Promise<PreviewResult> {
 async function handleFill(overwriteExisting: boolean): Promise<FillReport> {
   const profile = await getProfile();
   const scannedFields = scanFormFields();
-  
+
   const touchedFields: TouchedField[] = [];
   const reviewFields: Array<{ label: string; profileKey: string; confidence: ConfidenceLevel }> = [];
   let skipped = 0;
-  
+
   for (const field of scannedFields) {
     const match = matchFieldToProfile(field, profile);
-    
+
     if (!match) {
       skipped++;
       continue;
     }
-    
+
     const touched = fillField(match, overwriteExisting);
-    
+
     if (touched) {
       touchedFields.push(touched);
-      
+
       if (match.confidence === 'medium') {
         reviewFields.push({
           label: match.labelText,
@@ -480,8 +545,7 @@ async function handleFill(overwriteExisting: boolean): Promise<FillReport> {
       skipped++;
     }
   }
-  
-  // Save fill run for undo
+
   if (touchedFields.length > 0) {
     const fillRun: FillRun = {
       runId: generateId(),
@@ -491,9 +555,9 @@ async function handleFill(overwriteExisting: boolean): Promise<FillReport> {
     };
     await saveFillRun(fillRun);
   }
-  
+
   return {
-    filled: touchedFields.filter(f => f.confidence === 'high').length,
+    filled: touchedFields.filter((f) => f.confidence === 'high').length,
     needsReview: reviewFields.length,
     skipped,
     reviewFields,
@@ -517,7 +581,7 @@ function injectStyles(): void {
       background-color: rgba(16, 185, 129, 0.1) !important;
       transition: all 0.2s ease !important;
     }
-    
+
     .${HIGHLIGHT_CLASS_REVIEW} {
       outline: 2px solid #f59e0b !important;
       background-color: rgba(245, 158, 11, 0.1) !important;
@@ -530,5 +594,3 @@ function injectStyles(): void {
 // Initialize
 injectStyles();
 console.log('Workday Copilot: Content script loaded');
-
-

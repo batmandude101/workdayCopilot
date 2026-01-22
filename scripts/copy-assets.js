@@ -1,13 +1,13 @@
-// Cross-platform asset copy script
-const fs = require('fs');
-const path = require('path');
+// Cross-platform asset copy script (ESM)
+import fs from 'fs';
+import path from 'path';
 
 function copyRecursive(src, dest) {
   const stat = fs.statSync(src);
-  
+
   if (stat.isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
-    fs.readdirSync(src).forEach(child => {
+    fs.readdirSync(src).forEach((child) => {
       copyRecursive(path.join(src, child), path.join(dest, child));
     });
   } else {
@@ -32,4 +32,3 @@ copies.forEach(([src, dest]) => {
 });
 
 console.log('Assets copied successfully!');
-

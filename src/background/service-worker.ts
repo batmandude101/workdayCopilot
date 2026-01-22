@@ -18,21 +18,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     const isWorkday = tab.url.includes('myworkdayjobs.com');
     
-    // Update extension icon based on whether we're on Workday
+    // Show badge when on Workday
     if (isWorkday) {
-      chrome.action.setIcon({
-        tabId,
-        path: {
-          16: 'icons/icon16.png',
-          32: 'icons/icon32.png',
-          48: 'icons/icon48.png',
-          128: 'icons/icon128.png',
-        },
-      });
-      chrome.action.setBadgeText({ tabId, text: '' });
+      chrome.action.setBadgeText({ tabId, text: '✓' });
       chrome.action.setBadgeBackgroundColor({ tabId, color: '#10b981' });
     } else {
-      // Optionally show a different state for non-Workday pages
       chrome.action.setBadgeText({ tabId, text: '' });
     }
   }
